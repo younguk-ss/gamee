@@ -77,6 +77,12 @@ const ctx = canvas.getContext('2d');
 const WORLD_WIDTH = 1400;
 const WORLD_HEIGHT = 450;
 
+// 배경 이미지 로드 (동일 폴더의 bg.png 참조)
+const bgImage = new Image();
+bgImage.src = 'bg.png';
+let bgLoaded = false;
+bgImage.onload = () => { bgLoaded = true; };
+
 const player = {
   x: 50,
   y: 300,
@@ -174,7 +180,7 @@ function update() {
     }
   }
 
-  // Y축 이동 및 충돌 체크 (관통 방지 분리 처리)
+  // Y축 이동 및 충돌 체크
   const prevY = player.y;
   player.vy += player.gravity;
   player.y += player.vy;
@@ -182,15 +188,12 @@ function update() {
 
   for (let p of platforms) {
     if (checkAABB(player, p)) {
-      // 낙하 중 상단 착지 판정
       if (player.vy > 0 && (prevY + player.height) <= p.y + 12) {
         player.y = p.y - player.height;
         player.vy = 0;
         player.grounded = true;
         player.jumpCount = 0;
-      }
-      // 천장 충돌
-      else if (player.vy < 0) {
+      } else if (player.vy < 0) {
         player.y = p.y + p.height;
         player.vy = 0;
       }
@@ -210,42 +213,32 @@ function draw() {
   let camX = player.x - canvas.width / 3;
   camX = Math.max(0, Math.min(camX, WORLD_WIDTH - canvas.width));
 
-  // 푸른 어둠 배경 (할로우 나이트 연출)
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  bgGrad.addColorStop(0, '#070b19');
-  bgGrad.addColorStop(0.6, '#0f172a');
-  bgGrad.addColorStop(1, '#1e293b');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // 1. 배경 처리 (bg.png 적용)
+  if (bgLoaded) {
+    // 카메라 위치에 비례해 천천히 움직이는 패럴랙스 스크롤 연출 (속도 비율: 0.3)
+    const bgX = -(camX * 0.3) % canvas.width;
+    
+    ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
+    ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
+    if (bgX < 0) {
+      ctx.drawImage(bgImage, bgX + canvas.width * 2, 0, canvas.width, canvas.height);
+    }
+  } else {
+    // 이미지 로드 전 대체 푸른 어둠 그라데이션
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    bgGrad.addColorStop(0, '#070b19');
+    bgGrad.addColorStop(0.6, '#0f172a');
+    bgGrad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   ctx.save();
   ctx.translate(-camX, 0);
 
-  // 원경 산 (천천히 움직이는 시산 패럴랙스)
-  ctx.fillStyle = '#0d1527';
-  ctx.beginPath();
-  for (let i = -200; i < WORLD_WIDTH + 400; i += 220) {
-    ctx.lineTo(i + camX * 0.4, 200);
-    ctx.lineTo(i + 110 + camX * 0.4, 380);
-  }
-  ctx.lineTo(WORLD_WIDTH + 500, canvas.height);
-  ctx.lineTo(-200, canvas.height);
-  ctx.fill();
-
-  // 근경 산
-  ctx.fillStyle = '#111c33';
-  ctx.beginPath();
-  for (let i = -100; i < WORLD_WIDTH + 300; i += 160) {
-    ctx.lineTo(i + camX * 0.2, 260);
-    ctx.lineTo(i + 80 + camX * 0.2, 380);
-  }
-  ctx.lineTo(WORLD_WIDTH + 400, canvas.height);
-  ctx.lineTo(-100, canvas.height);
-  ctx.fill();
-
   // 검은 실루엣 발판 & 푸른 테두리
   for (let p of platforms) {
-    ctx.fillStyle = '#090d16';
+    ctx.fillStyle = 'rgba(9, 13, 22, 0.9)';
     ctx.fillRect(p.x, p.y, p.width, p.height);
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 2;
