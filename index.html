@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Hollow Jump</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+  body {
+    background: #05070f;
+    color: #fff;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  #game-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 16 / 9;
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .touch-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 800px;
+    padding: 15px 20px;
+    gap: 10px;
+  }
+  .d-pad { display: flex; gap: 15px; }
+  .btn {
+    background: rgba(30, 41, 59, 0.8);
+    border: 2px solid #3b82f6;
+    color: #e2e8f0;
+    font-size: 22px;
+    font-weight: bold;
+    border-radius: 12px;
+    padding: 16px 28px;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  .btn:active { background: #3b82f6; color: #fff; }
+  .btn-jump { padding: 16px 40px; background: rgba(30, 58, 138, 0.8); border-color: #60a5fa; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="canvas" width="800" height="450"></canvas>
+</div>
+
+<div class="touch-controls">
+  <div class="d-pad">
+    <button class="btn" id="btn-left">←</button>
+    <button class="btn" id="btn-right">→</button>
+  </div>
+  <button class="btn btn-jump" id="btn-jump">점프</button>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const WORLD_WIDTH = 1400;
+const WORLD_HEIGHT = 450;
+
+const player = {
+  x: 50,
+  y: 300,
+  width: 24,
+  height: 36,
+  vx: 0,
+  vy: 0,
+  speed: 4.5,
+  jumpForce: 10.5,
+  gravity: 0.45,
+  grounded: false,
+  jumpCount: 0,
+  maxJumps: 2
+};
+
+// 높이가 다른 발판 6개 + 시작/출구 바닥
+const platforms = [
+  { x: 0, y: 380, width: 200, height: 70 },
+  { x: 260, y: 320, width: 120, height: 20 },
+  { x: 440, y: 250, width: 110, height: 20 },
+  { x: 610, y: 180, width: 110, height: 20 },
+  { x: 780, y: 240, width: 120, height: 20 },
+  { x: 960, y: 310, width: 120, height: 20 },
+  { x: 1140, y: 360, width: 260, height: 90 }
+];
+
+const exitDoor = { x: 1300, y: 290, width: 40, height: 70 };
+let stageClear = false;
+
+const keys = { left: false, right: false };
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowLeft') keys.left = true;
+  if (e.code === 'ArrowRight') keys.right = true;
+  if (e.code === 'Space' && !e.repeat) doJump();
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowLeft') keys.left = false;
+  if (e.code === 'ArrowRight') keys.right = false;
+});
+
+function setupTouch(id, onStart, onEnd) {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); onStart(); });
+  el.addEventListener('touchend', (e) => { e.preventDefault(); onEnd(); });
+  el.addEventListener('mousedown', (e) => { e.preventDefault(); onStart(); });
+  el.addEventListener('mouseup', (e) => { e.preventDefault(); onEnd(); });
+}
+
+setupTouch('btn-left', () => keys.left = true, () => keys.left = false);
+setupTouch('btn-right', () => keys.right = true, () => keys.right = false);
+setupTouch('btn-jump', () => doJump(), () => {});
+
+function doJump() {
+  if (stageClear) { resetGame(); return; }
+  if (player.jumpCount < player.maxJumps) {
+    player.vy = -player.jumpForce;
+    player.jumpCount++;
+    player.grounded = false;
+  }
+}
+
+function resetGame() {
+  player.x = 50;
+  player.y = 300;
+  player.vx = 0;
+  player.vy = 0;
+  player.jumpCount = 0;
+  stageClear = false;
+}
+
+function checkAABB(r1, r2) {
+  return r1.x < r2.x + r2.width &&
+         r1.x + r1.width > r2.x &&
+         r1.y < r2.y + r2.height &&
+         r1.y + r1.height > r2.y;
+}
+
+function update() {
+  if (stageClear) return;
+
+  if (keys.left) player.vx = -player.speed;
+  else if (keys.right) player.vx = player.speed;
+  else player.vx = 0;
+
+  // X축 이동 및 충돌 체크
+  player.x += player.vx;
+  if (player.x < 0) player.x = 0;
+
+  for (let p of platforms) {
+    if (checkAABB(player, p)) {
+      if (player.vx > 0) player.x = p.x - player.width;
+      else if (player.vx < 0) player.x = p.x + p.width;
+    }
+  }
+
+  // Y축 이동 및 충돌 체크 (관통 방지 분리 처리)
+  const prevY = player.y;
+  player.vy += player.gravity;
+  player.y += player.vy;
+  player.grounded = false;
+
+  for (let p of platforms) {
+    if (checkAABB(player, p)) {
+      // 낙하 중 상단 착지 판정
+      if (player.vy > 0 && (prevY + player.height) <= p.y + 12) {
+        player.y = p.y - player.height;
+        player.vy = 0;
+        player.grounded = true;
+        player.jumpCount = 0;
+      }
+      // 천장 충돌
+      else if (player.vy < 0) {
+        player.y = p.y + p.height;
+        player.vy = 0;
+      }
+    }
+  }
+
+  // 추락 시 리셋
+  if (player.y > WORLD_HEIGHT + 100) resetGame();
+
+  // 출구 도착
+  if (checkAABB(player, exitDoor)) stageClear = true;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let camX = player.x - canvas.width / 3;
+  camX = Math.max(0, Math.min(camX, WORLD_WIDTH - canvas.width));
+
+  // 푸른 어둠 배경 (할로우 나이트 연출)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bgGrad.addColorStop(0, '#070b19');
+  bgGrad.addColorStop(0.6, '#0f172a');
+  bgGrad.addColorStop(1, '#1e293b');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.translate(-camX, 0);
+
+  // 원경 산 (천천히 움직이는 시산 패럴랙스)
+  ctx.fillStyle = '#0d1527';
+  ctx.beginPath();
+  for (let i = -200; i < WORLD_WIDTH + 400; i += 220) {
+    ctx.lineTo(i + camX * 0.4, 200);
+    ctx.lineTo(i + 110 + camX * 0.4, 380);
+  }
+  ctx.lineTo(WORLD_WIDTH + 500, canvas.height);
+  ctx.lineTo(-200, canvas.height);
+  ctx.fill();
+
+  // 근경 산
+  ctx.fillStyle = '#111c33';
+  ctx.beginPath();
+  for (let i = -100; i < WORLD_WIDTH + 300; i += 160) {
+    ctx.lineTo(i + camX * 0.2, 260);
+    ctx.lineTo(i + 80 + camX * 0.2, 380);
+  }
+  ctx.lineTo(WORLD_WIDTH + 400, canvas.height);
+  ctx.lineTo(-100, canvas.height);
+  ctx.fill();
+
+  // 검은 실루엣 발판 & 푸른 테두리
+  for (let p of platforms) {
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(p.x, p.y, p.width, p.height);
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + p.width, p.y);
+    ctx.stroke();
+  }
+
+  // 출구
+  ctx.fillStyle = '#1d4ed8';
+  ctx.fillRect(exitDoor.x, exitDoor.y, exitDoor.width, exitDoor.height);
+  ctx.strokeStyle = '#93c5fd';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(exitDoor.x, exitDoor.y, exitDoor.width, exitDoor.height);
+
+  // 캐릭터
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(player.x, player.y, player.width, player.height);
+  ctx.fillStyle = '#93c5fd';
+  ctx.fillRect(player.x + (player.vx >= 0 ? 14 : 4), player.y + 8, 5, 3);
+
+  ctx.restore();
+
+  // STAGE CLEAR 화면
+  if (stageClear) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#60a5fa';
+    ctx.font = 'bold 42px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('STAGE CLEAR', canvas.width / 2, canvas.height / 2 - 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('터치하거나 점프 버튼을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 35);
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
