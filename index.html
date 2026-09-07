@@ -2,114 +2,165 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Hollow Jump</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>우리동네 점프 게임</title>
 <style>
-  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+  * { 
+    box-sizing: border-box; 
+    user-select: none; 
+    -webkit-user-select: none; 
+    margin: 0; 
+    padding: 0; 
+  }
   body {
-    background: #05070f;
+    background: #0f172a;
     color: #fff;
-    font-family: sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
     overflow: hidden;
+    padding: 10px;
   }
+  
   #game-container {
     position: relative;
     width: 100%;
-    max-width: 800px;
-    aspect-ratio: 16 / 9;
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
-    border-radius: 8px;
+    max-width: 960px;
+    height: 70vh;
+    max-height: 540px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+    border-radius: 16px;
     overflow: hidden;
+    background: #1e293b;
+    border: 2px solid rgba(255, 255, 255, 0.1);
   }
+  
   canvas {
     width: 100%;
     height: 100%;
     display: block;
   }
+  
   .touch-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    max-width: 800px;
-    padding: 15px 20px;
-    gap: 10px;
+    max-width: 960px;
+    padding: 12px 5px 5px 5px;
+    gap: 12px;
   }
-  .d-pad { display: flex; gap: 15px; }
+  
+  .d-pad { 
+    display: flex; 
+    gap: 12px; 
+  }
+  
   .btn {
-    background: rgba(30, 41, 59, 0.8);
-    border: 2px solid #3b82f6;
-    color: #e2e8f0;
-    font-size: 22px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    font-size: 24px;
     font-weight: bold;
-    border-radius: 12px;
-    padding: 16px 28px;
+    border-radius: 16px;
+    padding: 16px 32px;
     touch-action: manipulation;
     cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .btn:active { background: #3b82f6; color: #fff; }
-  .btn-jump { padding: 16px 40px; background: rgba(30, 58, 138, 0.8); border-color: #60a5fa; }
+  
+  .btn:active { 
+    background: rgba(59, 130, 246, 0.6); 
+    border-color: #60a5fa;
+    transform: scale(0.96);
+  }
+  
+  .btn-jump { 
+    padding: 16px 44px; 
+    background: rgba(59, 130, 246, 0.4); 
+    border-color: rgba(147, 197, 253, 0.6);
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+  
+  .btn-jump:active {
+    background: rgba(37, 99, 235, 0.8);
+  }
+
+  @media (max-height: 500px) {
+    #game-container {
+      height: 65vh;
+    }
+    .btn {
+      padding: 10px 24px;
+      font-size: 18px;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div id="game-container">
-  <canvas id="canvas" width="800" height="450"></canvas>
+  <canvas id="canvas" width="960" height="540"></canvas>
 </div>
 
 <div class="touch-controls">
   <div class="d-pad">
-    <button class="btn" id="btn-left">←</button>
-    <button class="btn" id="btn-right">→</button>
+    <button class="btn" id="btn-left">◀</button>
+    <button class="btn" id="btn-right">▶</button>
   </div>
-  <button class="btn btn-jump" id="btn-jump">점프</button>
+  <button class="btn btn-jump" id="btn-jump">JUMP ⬆</button>
 </div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-const WORLD_WIDTH = 1400;
-const WORLD_HEIGHT = 450;
+const WORLD_WIDTH = 1600;
+const WORLD_HEIGHT = 540;
 
-// 배경 이미지 로드 (동일 폴더의 bg.png 참조)
+// 동네 사진 배경 로드
 const bgImage = new Image();
 bgImage.src = 'bg.png';
 let bgLoaded = false;
 bgImage.onload = () => { bgLoaded = true; };
 
 const player = {
-  x: 50,
-  y: 300,
-  width: 24,
-  height: 36,
+  x: 60,
+  y: 350,
+  width: 28,
+  height: 42,
   vx: 0,
   vy: 0,
-  speed: 4.5,
-  jumpForce: 10.5,
-  gravity: 0.45,
+  speed: 5.2,
+  jumpForce: 11.8,
+  gravity: 0.5,
   grounded: false,
   jumpCount: 0,
   maxJumps: 2
 };
 
-// 높이가 다른 발판 6개 + 시작/출구 바닥
+// 높이가 다채로운 6개 발판 + 시작/출구
 const platforms = [
-  { x: 0, y: 380, width: 200, height: 70 },
-  { x: 260, y: 320, width: 120, height: 20 },
-  { x: 440, y: 250, width: 110, height: 20 },
-  { x: 610, y: 180, width: 110, height: 20 },
-  { x: 780, y: 240, width: 120, height: 20 },
-  { x: 960, y: 310, width: 120, height: 20 },
-  { x: 1140, y: 360, width: 260, height: 90 }
+  { x: 0, y: 440, width: 220, height: 100 },
+  { x: 280, y: 370, width: 140, height: 24 },
+  { x: 480, y: 290, width: 130, height: 24 },
+  { x: 680, y: 210, width: 130, height: 24 },
+  { x: 880, y: 280, width: 140, height: 24 },
+  { x: 1100, y: 360, width: 140, height: 24 },
+  { x: 1320, y: 420, width: 280, height: 120 }
 ];
 
-const exitDoor = { x: 1300, y: 290, width: 40, height: 70 };
+const exitDoor = { x: 1500, y: 330, width: 50, height: 90 };
 let stageClear = false;
 
 const keys = { left: false, right: false };
@@ -127,10 +178,13 @@ window.addEventListener('keyup', (e) => {
 
 function setupTouch(id, onStart, onEnd) {
   const el = document.getElementById(id);
-  el.addEventListener('touchstart', (e) => { e.preventDefault(); onStart(); });
-  el.addEventListener('touchend', (e) => { e.preventDefault(); onEnd(); });
-  el.addEventListener('mousedown', (e) => { e.preventDefault(); onStart(); });
-  el.addEventListener('mouseup', (e) => { e.preventDefault(); onEnd(); });
+  const handleStart = (e) => { e.preventDefault(); onStart(); };
+  const handleEnd = (e) => { e.preventDefault(); onEnd(); };
+  
+  el.addEventListener('touchstart', handleStart);
+  el.addEventListener('touchend', handleEnd);
+  el.addEventListener('mousedown', handleStart);
+  el.addEventListener('mouseup', handleEnd);
 }
 
 setupTouch('btn-left', () => keys.left = true, () => keys.left = false);
@@ -147,8 +201,8 @@ function doJump() {
 }
 
 function resetGame() {
-  player.x = 50;
-  player.y = 300;
+  player.x = 60;
+  player.y = 350;
   player.vx = 0;
   player.vy = 0;
   player.jumpCount = 0;
@@ -180,7 +234,7 @@ function update() {
     }
   }
 
-  // Y축 이동 및 충돌 체크
+  // Y축 이동 및 충돌 체크 (발판 뚫림 완전 방지)
   const prevY = player.y;
   player.vy += player.gravity;
   player.y += player.vy;
@@ -188,7 +242,8 @@ function update() {
 
   for (let p of platforms) {
     if (checkAABB(player, p)) {
-      if (player.vy > 0 && (prevY + player.height) <= p.y + 12) {
+      // 착지 조건 판정
+      if (player.vy > 0 && (prevY + player.height) <= p.y + 14) {
         player.y = p.y - player.height;
         player.vy = 0;
         player.grounded = true;
@@ -200,35 +255,40 @@ function update() {
     }
   }
 
-  // 추락 시 리셋
+  // 화면 밖 추락 시 시작지점으로
   if (player.y > WORLD_HEIGHT + 100) resetGame();
 
-  // 출구 도착
+  // 출구 도달
   if (checkAABB(player, exitDoor)) stageClear = true;
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 시선 유연하게 따라가는 카메라
   let camX = player.x - canvas.width / 3;
   camX = Math.max(0, Math.min(camX, WORLD_WIDTH - canvas.width));
 
-  // 1. 배경 처리 (bg.png 적용)
+  // 1. 배경 그리기 (bg.png 적용 + 패럴랙스 효과)
   if (bgLoaded) {
-    // 카메라 위치에 비례해 천천히 움직이는 패럴랙스 스크롤 연출 (속도 비율: 0.3)
-    const bgX = -(camX * 0.3) % canvas.width;
+    const bgX = -(camX * 0.35) % canvas.width;
     
+    // 사진 원본이 밝고 선명하게 출력
     ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
     ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
     if (bgX < 0) {
       ctx.drawImage(bgImage, bgX + canvas.width * 2, 0, canvas.width, canvas.height);
     }
+
+    // 사진 위 게임 요소 시인성을 극대화하는 살짝의 소프트 필터
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.15)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   } else {
-    // 이미지 로드 전 대체 푸른 어둠 그라데이션
+    // 대체용 시원한 푸른 그라데이션
     const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    bgGrad.addColorStop(0, '#070b19');
-    bgGrad.addColorStop(0.6, '#0f172a');
-    bgGrad.addColorStop(1, '#1e293b');
+    bgGrad.addColorStop(0, '#38bdf8');
+    bgGrad.addColorStop(0.5, '#1e40af');
+    bgGrad.addColorStop(1, '#0f172a');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -236,47 +296,90 @@ function draw() {
   ctx.save();
   ctx.translate(-camX, 0);
 
-  // 검은 실루엣 발판 & 푸른 테두리
+  // 2. 발판 그리기 (사진 위에서도 눈에 잘 띄는 세련된 3D 스티커 스타일)
   for (let p of platforms) {
-    ctx.fillStyle = 'rgba(9, 13, 22, 0.9)';
-    ctx.fillRect(p.x, p.y, p.width, p.height);
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
+    // 발판 하단 그림자/입체감
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + p.width, p.y);
+    ctx.roundRect(p.x, p.y, p.width, p.height, 8);
+    ctx.fill();
+
+    // 발판 본체 (반투명 어두운 블루 글래스)
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(p.x, p.y, p.width, p.height - 4, 8);
+    ctx.fill();
+
+    // 발판 상단 네온 하이라이트 (착지 지점 가시성 극대화)
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.roundRect(p.x, p.y, p.width, 5, [6, 6, 0, 0]);
+    ctx.fill();
+
+    ctx.strokeStyle = '#60a5fa';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(p.x, p.y, p.width, p.height - 4, 8);
     ctx.stroke();
   }
 
-  // 출구
-  ctx.fillStyle = '#1d4ed8';
-  ctx.fillRect(exitDoor.x, exitDoor.y, exitDoor.width, exitDoor.height);
+  // 3. 출구 게이트 (발광 포탈 스타일)
+  ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
+  ctx.beginPath();
+  ctx.arc(exitDoor.x + exitDoor.width/2, exitDoor.y + exitDoor.height/2, 45, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#2563eb';
+  ctx.beginPath();
+  ctx.roundRect(exitDoor.x, exitDoor.y, exitDoor.width, exitDoor.height, 12);
+  ctx.fill();
   ctx.strokeStyle = '#93c5fd';
   ctx.lineWidth = 3;
-  ctx.strokeRect(exitDoor.x, exitDoor.y, exitDoor.width, exitDoor.height);
+  ctx.stroke();
 
-  // 캐릭터
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(player.x, player.y, player.width, player.height);
-  ctx.strokeStyle = '#60a5fa';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(player.x, player.y, player.width, player.height);
-  ctx.fillStyle = '#93c5fd';
-  ctx.fillRect(player.x + (player.vx >= 0 ? 14 : 4), player.y + 8, 5, 3);
+  // 출구 아이콘
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('EXIT', exitDoor.x + exitDoor.width / 2, exitDoor.y + exitDoor.height / 2 + 7);
+
+  // 4. 캐릭터 그리기 (밝고 또렷한 아바타)
+  // 캐릭터 잔상/오라 효과
+  ctx.fillStyle = 'rgba(96, 165, 250, 0.3)';
+  ctx.beginPath();
+  ctx.arc(player.x + player.width/2, player.y + player.height/2, 22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 캐릭터 본체
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.roundRect(player.x, player.y, player.width, player.height, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // 캐릭터 눈 (바라보는 방향)
+  ctx.fillStyle = '#0284c7';
+  const eyeOffset = player.vx < 0 ? 5 : (player.vx > 0 ? 15 : 10);
+  ctx.fillRect(player.x + eyeOffset, player.y + 10, 5, 8);
+  ctx.fillRect(player.x + eyeOffset + 6, player.y + 10, 5, 8);
 
   ctx.restore();
 
-  // STAGE CLEAR 화면
+  // 5. STAGE CLEAR 클리어 팝업
   if (stageClear) {
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#60a5fa';
-    ctx.font = 'bold 42px sans-serif';
+    
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 48px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('STAGE CLEAR', canvas.width / 2, canvas.height / 2 - 10);
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('터치하거나 점프 버튼을 눌러 다시 시작', canvas.width / 2, canvas.height / 2 + 35);
+    ctx.fillText('🎉 STAGE CLEAR!', canvas.width / 2, canvas.height / 2 - 15);
+    
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '18px sans-serif';
+    ctx.fillText('버튼이나 점프를 눌러 다시 시작하세요', canvas.width / 2, canvas.height / 2 + 35);
   }
 }
 
