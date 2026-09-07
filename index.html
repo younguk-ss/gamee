@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>우리동네 점프 게임</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
   * { 
     box-sizing: border-box; 
@@ -43,7 +46,150 @@
     height: 100%;
     display: block;
   }
-  
+
+  #timer-hud {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #38bdf8;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10;
+  }
+
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 20;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+  }
+
+  .modal-overlay.hidden {
+    display: none;
+    opacity: 0;
+  }
+
+  .modal-card {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  }
+
+  .modal-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #38bdf8;
+    margin-bottom: 6px;
+  }
+
+  .modal-record {
+    font-size: 18px;
+    color: #e2e8f0;
+    margin-bottom: 16px;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .name-input {
+    flex: 1;
+    background: #0f172a;
+    border: 1.5px solid #334155;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #fff;
+    font-size: 15px;
+    outline: none;
+  }
+
+  .name-input:focus {
+    border-color: #38bdf8;
+  }
+
+  .btn-submit {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-submit:hover {
+    background: #1d4ed8;
+  }
+
+  .leaderboard-container {
+    max-height: 180px;
+    overflow-y: auto;
+    background: #0f172a;
+    border-radius: 12px;
+    padding: 8px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .leaderboard-table th {
+    color: #94a3b8;
+    padding: 6px;
+    border-bottom: 1px solid #334155;
+  }
+
+  .leaderboard-table td {
+    padding: 8px 6px;
+    color: #f8fafc;
+  }
+
+  .rank-1 { color: #facc15; font-weight: bold; }
+  .rank-2 { color: #cbd5e1; font-weight: bold; }
+  .rank-3 { color: #f97316; font-weight: bold; }
+
+  .btn-restart {
+    width: 100%;
+    background: rgba(56, 189, 248, 0.2);
+    border: 1.5px solid #38bdf8;
+    color: #38bdf8;
+    font-weight: bold;
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  .btn-restart:active {
+    background: rgba(56, 189, 248, 0.4);
+  }
+
   .touch-controls {
     display: flex;
     justify-content: space-between;
@@ -110,7 +256,38 @@
 <body>
 
 <div id="game-container">
+  <div id="timer-hud">⏱️ 00:00.00</div>
   <canvas id="canvas" width="960" height="540"></canvas>
+
+  <!-- STAGE CLEAR & LEADERBOARD MODAL -->
+  <div id="clear-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">🎉 STAGE CLEAR!</div>
+      <div class="modal-record" id="modal-time-text">기록: 00.00초</div>
+
+      <div class="input-group" id="input-container">
+        <input type="text" id="player-name" class="name-input" placeholder="이름을 입력하세요 (최대 8자)" maxlength="8">
+        <button class="btn-submit" onclick="submitScore()">등록</button>
+      </div>
+
+      <div class="leaderboard-container">
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th>이름</th>
+              <th>기록</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-list">
+            <tr><td colspan="3" style="color: #64748b;">기록 불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button class="btn-restart" onclick="resetGame()">다시 도전하기 🔄</button>
+    </div>
+  </div>
 </div>
 
 <div class="touch-controls">
@@ -122,13 +299,33 @@
 </div>
 
 <script>
+// ------------------------------------------------------------------
+// 🔑 Supabase 설정
+// ------------------------------------------------------------------
+const SUPABASE_URL = 'https://xhvmftqoznbgyihbxlyi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_b52u4uxAaQA5-XlrHoJbIg_ZZpGDQSL';
+
+let supabaseClient = null;
+if (typeof window.supabase !== 'undefined' && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 const WORLD_WIDTH = 1600;
 const WORLD_HEIGHT = 540;
 
-// 동네 사진 배경 로드
+// 타이머 변수
+let startTime = 0;
+let elapsedTime = 0;
+let timerInterval = null;
+let isTimerRunning = false;
+let hasSubmitted = false;
+
+// 임시 로컬 리더보드 데이터 (Supabase 연동 전 백업용)
+let localLeaderboard = [];
+
 const bgImage = new Image();
 bgImage.src = 'bg.png';
 let bgLoaded = false;
@@ -149,7 +346,6 @@ const player = {
   maxJumps: 2
 };
 
-// 높이가 다채로운 6개 발판 + 시작/출구
 const platforms = [
   { x: 0, y: 440, width: 220, height: 100 },
   { x: 280, y: 370, width: 140, height: 24 },
@@ -164,6 +360,147 @@ const exitDoor = { x: 1500, y: 330, width: 50, height: 90 };
 let stageClear = false;
 
 const keys = { left: false, right: false };
+
+function startTimer() {
+  if (isTimerRunning) return;
+  startTime = Date.now() - elapsedTime;
+  isTimerRunning = true;
+  timerInterval = setInterval(() => {
+    elapsedTime = Date.now() - startTime;
+    updateTimerHUD();
+  }, 10);
+}
+
+function stopTimer() {
+  isTimerRunning = false;
+  clearInterval(timerInterval);
+}
+
+function resetTimer() {
+  stopTimer();
+  elapsedTime = 0;
+  updateTimerHUD();
+}
+
+function formatTime(ms) {
+  const totalSeconds = ms / 1000;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = (totalSeconds % 60).toFixed(2);
+  const padMins = String(mins).padStart(2, '0');
+  const padSecs = String(secs).padStart(5, '0');
+  return `${padMins}:${padSecs}`;
+}
+
+function updateTimerHUD() {
+  document.getElementById('timer-hud').innerText = `⏱️ ${formatTime(elapsedTime)}`;
+}
+
+// 리더보드 불러오기
+async function fetchLeaderboard() {
+  const tbody = document.getElementById('leaderboard-list');
+  tbody.innerHTML = '<tr><td colspan="3" style="color: #64748b;">불러오는 중...</td></tr>';
+
+  let scores = [];
+
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('leaderboard')
+        .select('*')
+        .order('time_ms', { ascending: true })
+        .limit(10);
+
+      if (!error && data) {
+        scores = data;
+      }
+    } catch (e) {
+      console.error('Supabase fetch error:', e);
+    }
+  } else {
+    scores = localLeaderboard;
+  }
+
+  renderLeaderboardTable(scores);
+}
+
+function renderLeaderboardTable(scores) {
+  const tbody = document.getElementById('leaderboard-list');
+  if (scores.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color: #64748b;">아직 등록된 기록이 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = scores.map((item, idx) => {
+    let rankClass = '';
+    let rankIcon = `${idx + 1}위`;
+    if (idx === 0) { rankClass = 'rank-1'; rankIcon = '🥇 1위'; }
+    else if (idx === 1) { rankClass = 'rank-2'; rankIcon = '🥈 2위'; }
+    else if (idx === 2) { rankClass = 'rank-3'; rankIcon = '🥉 3위'; }
+
+    return `
+      <tr>
+        <td class="${rankClass}">${rankIcon}</td>
+        <td>${escapeHtml(item.name)}</td>
+        <td style="font-family: monospace;">${formatTime(item.time_ms)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  })[m]);
+}
+
+async function submitScore() {
+  if (hasSubmitted) return;
+  const nameInput = document.getElementById('player-name');
+  const name = nameInput.value.trim() || '무명점퍼';
+
+  hasSubmitted = true;
+  document.getElementById('input-container').style.display = 'none';
+
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('leaderboard').insert([
+        { name: name, time_ms: elapsedTime }
+      ]);
+    } catch (e) {
+      console.error('Supabase submit error:', e);
+    }
+  } else {
+    localLeaderboard.push({ name: name, time_ms: elapsedTime });
+    localLeaderboard.sort((a, b) => a.time_ms - b.time_ms);
+  }
+
+  fetchLeaderboard();
+}
+
+function handleStageClear() {
+  stageClear = true;
+  stopTimer();
+
+  document.getElementById('modal-time-text').innerText = `최종 기록: ${formatTime(elapsedTime)}`;
+  document.getElementById('input-container').style.display = 'flex';
+  document.getElementById('player-name').value = '';
+  document.getElementById('clear-modal').classList.remove('hidden');
+  hasSubmitted = false;
+
+  fetchLeaderboard();
+}
+
+function resetGame() {
+  player.x = 60;
+  player.y = 350;
+  player.vx = 0;
+  player.vy = 0;
+  player.jumpCount = 0;
+  stageClear = false;
+
+  document.getElementById('clear-modal').classList.add('hidden');
+  resetTimer();
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowLeft') keys.left = true;
@@ -192,21 +529,13 @@ setupTouch('btn-right', () => keys.right = true, () => keys.right = false);
 setupTouch('btn-jump', () => doJump(), () => {});
 
 function doJump() {
-  if (stageClear) { resetGame(); return; }
+  if (stageClear) return;
   if (player.jumpCount < player.maxJumps) {
     player.vy = -player.jumpForce;
     player.jumpCount++;
     player.grounded = false;
+    if (!isTimerRunning) startTimer();
   }
-}
-
-function resetGame() {
-  player.x = 60;
-  player.y = 350;
-  player.vx = 0;
-  player.vy = 0;
-  player.jumpCount = 0;
-  stageClear = false;
 }
 
 function checkAABB(r1, r2) {
@@ -219,11 +548,14 @@ function checkAABB(r1, r2) {
 function update() {
   if (stageClear) return;
 
+  if (keys.left || keys.right) {
+    if (!isTimerRunning) startTimer();
+  }
+
   if (keys.left) player.vx = -player.speed;
   else if (keys.right) player.vx = player.speed;
   else player.vx = 0;
 
-  // X축 이동 및 충돌 체크
   player.x += player.vx;
   if (player.x < 0) player.x = 0;
 
@@ -234,7 +566,6 @@ function update() {
     }
   }
 
-  // Y축 이동 및 충돌 체크 (발판 뚫림 완전 방지)
   const prevY = player.y;
   player.vy += player.gravity;
   player.y += player.vy;
@@ -242,7 +573,6 @@ function update() {
 
   for (let p of platforms) {
     if (checkAABB(player, p)) {
-      // 착지 조건 판정
       if (player.vy > 0 && (prevY + player.height) <= p.y + 14) {
         player.y = p.y - player.height;
         player.vy = 0;
@@ -255,36 +585,29 @@ function update() {
     }
   }
 
-  // 화면 밖 추락 시 시작지점으로
   if (player.y > WORLD_HEIGHT + 100) resetGame();
 
-  // 출구 도달
-  if (checkAABB(player, exitDoor)) stageClear = true;
+  if (checkAABB(player, exitDoor)) {
+    handleStageClear();
+  }
 }
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 시선 유연하게 따라가는 카메라
   let camX = player.x - canvas.width / 3;
   camX = Math.max(0, Math.min(camX, WORLD_WIDTH - canvas.width));
 
-  // 1. 배경 그리기 (bg.png 적용 + 패럴랙스 효과)
   if (bgLoaded) {
     const bgX = -(camX * 0.35) % canvas.width;
-    
-    // 사진 원본이 밝고 선명하게 출력
     ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
     ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
     if (bgX < 0) {
       ctx.drawImage(bgImage, bgX + canvas.width * 2, 0, canvas.width, canvas.height);
     }
-
-    // 사진 위 게임 요소 시인성을 극대화하는 살짝의 소프트 필터
     ctx.fillStyle = 'rgba(15, 23, 42, 0.15)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   } else {
-    // 대체용 시원한 푸른 그라데이션
     const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
     bgGrad.addColorStop(0, '#38bdf8');
     bgGrad.addColorStop(0.5, '#1e40af');
@@ -296,21 +619,17 @@ function draw() {
   ctx.save();
   ctx.translate(-camX, 0);
 
-  // 2. 발판 그리기 (사진 위에서도 눈에 잘 띄는 세련된 3D 스티커 스타일)
   for (let p of platforms) {
-    // 발판 하단 그림자/입체감
     ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.beginPath();
     ctx.roundRect(p.x, p.y, p.width, p.height, 8);
     ctx.fill();
 
-    // 발판 본체 (반투명 어두운 블루 글래스)
     ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
     ctx.beginPath();
     ctx.roundRect(p.x, p.y, p.width, p.height - 4, 8);
     ctx.fill();
 
-    // 발판 상단 네온 하이라이트 (착지 지점 가시성 극대화)
     ctx.fillStyle = '#38bdf8';
     ctx.beginPath();
     ctx.roundRect(p.x, p.y, p.width, 5, [6, 6, 0, 0]);
@@ -323,7 +642,6 @@ function draw() {
     ctx.stroke();
   }
 
-  // 3. 출구 게이트 (발광 포탈 스타일)
   ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
   ctx.beginPath();
   ctx.arc(exitDoor.x + exitDoor.width/2, exitDoor.y + exitDoor.height/2, 45, 0, Math.PI * 2);
@@ -337,20 +655,16 @@ function draw() {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // 출구 아이콘
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 20px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('EXIT', exitDoor.x + exitDoor.width / 2, exitDoor.y + exitDoor.height / 2 + 7);
 
-  // 4. 캐릭터 그리기 (밝고 또렷한 아바타)
-  // 캐릭터 잔상/오라 효과
   ctx.fillStyle = 'rgba(96, 165, 250, 0.3)';
   ctx.beginPath();
   ctx.arc(player.x + player.width/2, player.y + player.height/2, 22, 0, Math.PI * 2);
   ctx.fill();
 
-  // 캐릭터 본체
   ctx.fillStyle = '#f8fafc';
   ctx.beginPath();
   ctx.roundRect(player.x, player.y, player.width, player.height, 8);
@@ -359,28 +673,12 @@ function draw() {
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  // 캐릭터 눈 (바라보는 방향)
   ctx.fillStyle = '#0284c7';
   const eyeOffset = player.vx < 0 ? 5 : (player.vx > 0 ? 15 : 10);
   ctx.fillRect(player.x + eyeOffset, player.y + 10, 5, 8);
   ctx.fillRect(player.x + eyeOffset + 6, player.y + 10, 5, 8);
 
   ctx.restore();
-
-  // 5. STAGE CLEAR 클리어 팝업
-  if (stageClear) {
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 48px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🎉 STAGE CLEAR!', canvas.width / 2, canvas.height / 2 - 15);
-    
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '18px sans-serif';
-    ctx.fillText('버튼이나 점프를 눌러 다시 시작하세요', canvas.width / 2, canvas.height / 2 + 35);
-  }
 }
 
 function gameLoop() {
